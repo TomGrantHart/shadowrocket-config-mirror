@@ -3,9 +3,9 @@
 # 五步处理：
 #   1. URL 替换：所有 yfamilys.com/rule/*.list -> 仓库 RULE/*.list（自托管）
 #   2. 启用 AntiAD 广告拦截（取消上游注释）
-#   3. 在 [Proxy Group] 段注入「自定义」策略组（供 RULE-SET 引用）
-#   4. 在 [Rule] 段注入 RULE-SET,<custom_reject.list>,自定义（优先匹配）
-#   5. 修改 [General] 段：dns-server 换 Cloudflare DoH + 添加 hijack-dns
+#   3. 在 [Proxy Group] 段注入「自定义」策略组
+#   4. 在 [Rule] 段内联注入 custom.list 规则（非 RULE-SET 引用）
+#   5. 修改 [General] 段：dns-server 换 Cloudflare DoH + hijack-dns + 注释 fallback-dns-server
 import io
 import os
 
@@ -14,7 +14,7 @@ FINAL = "shadowrocket_final.conf"
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "TomGrantHart/shadowrocket-config-mirror")
 RULE_BASE = f"https://raw.githubusercontent.com/{REPO}/main/RULE"
-CUSTOM_LIST_URL = f"https://raw.githubusercontent.com/{REPO}/main/custom_reject.list"
+CUSTOM_LIST = "custom.list"
 
 # 「自定义」策略组：可选 REJECT / DIRECT / 各分流策略组，用户在 Shadowrocket 手动选
 CUSTOM_GROUP = (
@@ -24,13 +24,7 @@ CUSTOM_GROUP = (
     "🍿 国外媒体, 🍔 国内媒体, 🍟 新浪微博, Ⓜ️ 微软服务, 🍎 苹果服务, 🎮 游戏平台\n"
 )
 
-INJECT_RULE = (
-    "# === 自定义规则（自动注入，勿手动编辑 final.conf）===\n"
-    f"RULE-SET,{CUSTOM_LIST_URL},🚀 策略选择\n"
-    "# === 自定义规则结束 ===\n"
-)
-
-# [General] 段 DNS 修改：明文 DNS 换 Cloudflare DoH（走代理查询防泄露）+ hijack-dns + 注释 fallback-dns-server
+# [General] 段 DNS 修改
 DNS_OLD = "dns-server = 119.29.29.29,114.114.114.114,223.5.5.5,system"
 DNS_NEW = (
     "dns-server = https://cloudflare-dns.com/dns-query#proxy, "
@@ -56,13 +50,19 @@ if "[Proxy Group]" in content:
     nl = content.index("\n", idx) + 1
     content = content[:nl] + CUSTOM_GROUP + content[nl:]
 
-# 4. 在 [Rule] 段开头注入自定义 RULE-SET
-if "[Rule]" in content:
-    idx = content.index("[Rule]")
-    nl = content.index("\n", idx) + 1
-    content = content[:nl] + INJECT_RULE + content[nl:]
+# 4. 在 [Rule] 段内联注入 custom.list 的规则内容（逐行读取，直接写入 [Rule] 下）
+if os.path.exists(CUSTOM_LIST):
+    with io.open(CUSTOM_LIST, encoding="utf-8") as f:
+        custom_rules = f.read().strip()
+    inject_block = "# === 自定义规则（内联）===\n" + custom_rules + "\n# === 自定义规则结束 ===\n"
+    if "[Rule]" in content:
+        idx = content.index("[Rule]")
+        nl = content.index("\n", idx) + 1
+        content = content[:nl] + inject_block + content[nl:]
+    else:
+        content = content.rstrip("\n") + "\n\n[Rule]\n" + inject_block
 else:
-    content = content.rstrip("\n") + "\n\n[Rule]\n" + INJECT_RULE
+    print(f"::warning::{CUSTOM_LIST} 不存在，跳过自定义规则注入")
 
 # 5. 修改 [General] 段：dns-server 换 Cloudflare DoH + hijack-dns
 if DNS_OLD in content:
@@ -70,7 +70,7 @@ if DNS_OLD in content:
 else:
     print("::warning::未找到原始 dns-server 行，DNS 修改未生效")
 
-# 5b. 注释 fallback-dns-server（使用 Cloudflare DoH 后不需要系统回退）
+# 5b. 注释 fallback-dns-server
 content = content.replace("fallback-dns-server = system", "# fallback-dns-server = system")
 
 with io.open(FINAL, "w", encoding="utf-8", newline="\n") as f:
@@ -80,5 +80,5 @@ print(f"已生成 {FINAL}")
 print(f"  1) URL 替换 -> {RULE_BASE}/")
 print(f"  2) 启用 AntiAD（REJECT）")
 print(f"  3) 注入策略组「自定义」")
-print(f"  4) 注入 RULE-SET -> {CUSTOM_LIST_URL} (策略: 🚀 策略选择)")
+print(f"  4) 内联注入 {CUSTOM_LIST} 规则到 [Rule]")
 print(f"  5) DNS -> Cloudflare DoH + hijack-dns, fallback-dns-server 已注释")
