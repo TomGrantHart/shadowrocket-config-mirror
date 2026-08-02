@@ -85,10 +85,10 @@ DOMAIN-SUFFIX,roovza.skadsdk.appsflyersdk.com,REJECT
 
 
 # --- 美团 & 大众点评 (本地生活，防定位漂移与支付风控) ---
-- DOMAIN-SUFFIX,meituan.com,DIRECT
-- DOMAIN-SUFFIX,meituan.net,DIRECT
-- DOMAIN-SUFFIX,mtyun.com,DIRECT
-- DOMAIN-SUFFIX,dianping.com,DIRECT
-- DOMAIN-SUFFIX,dpfile.com,DIRECT
-- DOMAIN-KEYWORD,meituan,DIRECT
-- DOMAIN-KEYWORD,dianping,DIRECT
+DOMAIN-SUFFIX,meituan.com,DIRECT
+DOMAIN-SUFFIX,meituan.net,DIRECT
+DOMAIN-SUFFIX,mtyun.com,DIRECT
+DOMAIN-SUFFIX,dianping.com,DIRECT
+DOMAIN-SUFFIX,dpfile.com,DIRECT
+DOMAIN-KEYWORD,meituan,DIRECT
+DOMAIN-KEYWORD,dianping,DIRECT
