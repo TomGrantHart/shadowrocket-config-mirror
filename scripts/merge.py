@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # 把上游镜像 shadowrocket_basic.conf 注入自定义规则后生成 shadowrocket_final.conf
-# 三步处理：
+# 四步处理：
 #   1. URL 替换：所有 yfamilys.com/rule/*.list -> 仓库 RULE/*.list（自托管）
-#   2. 在 [Proxy Group] 段注入「自定义」策略组（供 RULE-SET 引用）
-#   3. 在 [Rule] 段注入 RULE-SET,<custom_reject.list>,自定义（优先匹配）
+#   2. 启用 AntiAD 广告拦截（取消上游注释）
+#   3. 在 [Proxy Group] 段注入「自定义」策略组（供 RULE-SET 引用）
+#   4. 在 [Rule] 段注入 RULE-SET,<custom_reject.list>,自定义（优先匹配）
 import io
 import os
 
@@ -34,13 +35,19 @@ with io.open(BASIC, encoding="utf-8") as f:
 # 1. URL 替换：yfamilys list -> 仓库自托管 RULE/
 content = content.replace("https://yfamilys.com/rule/", RULE_BASE + "/")
 
-# 2. 在 [Proxy Group] 段开头注入「自定义」策略组
+# 2. 启用 AntiAD 广告拦截（取消上游注释，策略 REJECT）
+content = content.replace(
+    "#RULE-SET," + RULE_BASE + "/AntiAD.list,REJECT",
+    "RULE-SET," + RULE_BASE + "/AntiAD.list,REJECT",
+)
+
+# 3. 在 [Proxy Group] 段开头注入「自定义」策略组
 if "[Proxy Group]" in content:
     idx = content.index("[Proxy Group]")
     nl = content.index("\n", idx) + 1
     content = content[:nl] + CUSTOM_GROUP + content[nl:]
 
-# 3. 在 [Rule] 段开头注入自定义 RULE-SET
+# 4. 在 [Rule] 段开头注入自定义 RULE-SET
 if "[Rule]" in content:
     idx = content.index("[Rule]")
     nl = content.index("\n", idx) + 1
@@ -53,5 +60,6 @@ with io.open(FINAL, "w", encoding="utf-8", newline="\n") as f:
 
 print(f"已生成 {FINAL}")
 print(f"  1) URL 替换 -> {RULE_BASE}/")
-print(f"  2) 注入策略组「自定义」")
-print(f"  3) 注入 RULE-SET -> {CUSTOM_LIST_URL}")
+print(f"  2) 启用 AntiAD（REJECT）")
+print(f"  3) 注入策略组「自定义」")
+print(f"  4) 注入 RULE-SET -> {CUSTOM_LIST_URL}")
