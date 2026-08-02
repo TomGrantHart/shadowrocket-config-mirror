@@ -27,10 +27,19 @@ jobs:
 
       - name: Download upstream basic
         run: |
-          set -euo pipefail
-          curl -fsSL --retry 3 --max-time 30 -o /tmp/upstream.conf "$UPSTREAM_URL"
-          if [ ! -s /tmp/upstream.conf ] || ! grep -q '\[Rule\]' /tmp/upstream.conf; then
-            echo "::warning::上游下载失败或内容异常，跳过本次更新"
+          set -uo pipefail
+          ok=0
+          for i in 1 2 3 4 5; do
+            if curl -fsSL --retry 3 --retry-all-errors --max-time 60 -o /tmp/upstream.conf "$UPSTREAM_URL"; then
+              echo "下载成功（第 $i 次尝试）"
+              ok=1
+              break
+            fi
+            echo "第 $i 次下载失败，5 秒后重试..."
+            sleep 5
+          done
+          if [ "$ok" = 0 ] || [ ! -s /tmp/upstream.conf ] || ! grep -q '\[Rule\]' /tmp/upstream.conf; then
+            echo "::warning::上游下载失败或内容异常，跳过本次更新（保留旧配置）"
             exit 0
           fi
           cp /tmp/upstream.conf "$BASIC_FILE"
@@ -40,7 +49,7 @@ jobs:
           mkdir -p RULE
           grep -oE 'https://yfamilys.com/rule/[A-Za-z0-9._-]+\.list' "$BASIC_FILE" | sort -u | while read url; do
             fname=$(basename "$url")
-            if curl -fsSL --retry 2 --max-time 30 -o "RULE/$fname" "$url"; then
+            if curl -fsSL --retry 3 --retry-all-errors --max-time 60 -o "RULE/$fname" "$url"; then
               echo "synced $fname"
             else
               echo "::warning::failed to sync $fname"
