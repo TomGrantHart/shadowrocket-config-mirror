@@ -1,0 +1,24 @@
+# 自定义广告拦截规则（被 shadowrocket_final.conf 的 RULE-SET 引用）
+# 每行格式：类型,值  —— 策略由引用方的 RULE-SET 行统一指定为 REJECT
+# 增删规则只改本文件，Actions 会自动重新生成 final.conf
+
+# Google 广告 / 分析
+DOMAIN-SUFFIX,app-measurement.com
+DOMAIN-SUFFIX,app-analytics-services.com
+DOMAIN-SUFFIX,fundingchoicesmessages.google.com
+DOMAIN-SUFFIX,googleads.g.doubleclick-cn.net
+
+# 字节跳动 / 抖音系埋点 & 日志
+DOMAIN-SUFFIX,log3-misc-lf.amemv.com
+DOMAIN-SUFFIX,log5-misc-lf.amemv.com
+DOMAIN-SUFFIX,log.snssdk.com
+DOMAIN-SUFFIX,lf.snssdk.com
+DOMAIN-SUFFIX,ma.zijieapi.com
+DOMAIN-SUFFIX,lf-leads-fe-scm.bytecdn.com
+DOMAIN-SUFFIX,mssdk5-normal-lf.zijieapi.com
+
+# 腾讯 / 其他
+DOMAIN-SUFFIX,dig.bdurl.net
+DOMAIN-SUFFIX,dig.zjurl.cn
+DOMAIN-SUFFIX,in.appcenter.ms
+DOMAIN-SUFFIX,finderpdd.video.qq.com
