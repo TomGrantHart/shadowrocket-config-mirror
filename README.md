@@ -1,36 +1,44 @@
-# Shadowrocket 配置镜像仓库
+# Shadowrocket 配置镜像仓库（全自托管）
 
-把 [yfamilys 配置一](https://yfamilys.com/config/shadowrocket_basic.conf) 镜像到自己的 GitHub 仓库，由 GitHub Actions **每天自动同步**上游更新，并自动注入自定义规则生成最终配置。Shadowrocket 订阅一个链接即可，自定义规则永不受上游更新影响。
+把 [yfamilys 配置一](https://yfamilys.com/config/shadowrocket_basic.conf) 镜像到自己的 GitHub 仓库，由 GitHub Actions **每天自动同步**上游配置 + RULE/ 下所有规则文件，并自动注入自定义策略组与规则，生成最终配置。Shadowrocket 订阅一个链接即可，**所有 RULE-SET 全部指向本仓库自托管的 RULE/**，不再依赖 yfamilys 的 list 服务器。
 
 ## 仓库结构
 
 ```
 shadowrocket-config-mirror/
-├── .github/workflows/sync-upstream.yml   # 每日定时同步 + 注入 workflow
-├── shadowrocket_basic.conf                # 上游纯镜像（Actions 覆盖更新，勿手动改）
-├── shadowrocket_final.conf                # 最终配置 = basic + 注入 RULE-SET（Actions 生成，订阅这个）
-├── custom_reject.list                     # 自定义 REJECT 规则源（增删规则只改这里）
+├── .github/workflows/sync-upstream.yml   # 每日同步 basic + RULE/ + 生成 final
+├── shadowrocket_basic.conf                # 上游纯镜像（Actions 覆盖，勿手改）
+├── shadowrocket_final.conf                # 最终配置（Actions 生成，订阅这个）
+├── custom_reject.list                     # 自定义规则源（增删规则只改这里）
+├── RULE/                                  # 自托管的所有规则 list（34 个，Actions 同步）
+│   ├── ai.list  Apple.list  Netflix.list  ...  AntiAD.list(27万行) ...
 ├── scripts/merge.py                       # 注入脚本：basic → final
-├── custom_ad_block.sgmodule               # 可选：模块版自定义规则（与 list 内容相同，二选一）
-├── .gitattributes                         # 强制 LF 行尾
+├── custom_ad_block.sgmodule               # 可选模块版（与 list 二选一）
+├── .gitattributes
 └── README.md
 ```
 
 ## 工作原理
 
 ```
-上游 yfamilys  ──(每天 CST 02:00 Actions)──▶  basic.conf  ──(merge.py 注入)──▶  final.conf
-                                                                                 │
-custom_reject.list  ◀── 增删规则只改这里                                        │ raw 链接
-      └──────────── RULE-SET 引用 ────────────────────────────────────────────┘
-                                                                    ▼
-                                                          Shadowrocket 订阅 final.conf
+上游 yfamilys ──(每天 02:00 Actions)──▶ basic.conf
+                      │
+                      ├──▶ RULE/*.list（34 个 list 全部镜像到本地，自托管）
+                      │
+basic.conf + RULE/ ──(merge.py)──▶ final.conf
+   ├─ ① URL 替换：yfamilys.com/rule/* → 本仓库 RULE/*
+   ├─ ② [Proxy Group] 注入「自定义」策略组
+   └─ ③ [Rule] 注入 RULE-SET,<custom_reject.list>,自定义
+                      │
+                      ▼ raw 链接
+              Shadowrocket 订阅 final.conf
 ```
 
-- **basic.conf**：上游的纯镜像，Actions 每天覆盖，保持原样不篡改。
-- **final.conf**：merge.py 在 basic 的 `[Rule]` 段开头注入一行 `RULE-SET,<custom_reject.list 链接>,REJECT` 后生成。自定义规则排在所有上游规则之前，优先匹配。
-- **custom_reject.list**：你的自定义规则源（纯规则列表，每行 `类型,值`，策略由 RULE-SET 行统一指定为 REJECT）。改规则只改这里，Actions 会自动重新生成 final.conf。
-- **外部 list 层**：配置里引用的上游 ~30 个 `RULE-SET`（yfamilys.com/rule/*.list）Shadowrocket 订阅时实时拉最新，无需镜像。
+- **basic.conf**：上游纯镜像，每天覆盖。
+- **RULE/**：上游引用的 34 个 list 全部镜像到本地，Actions 每天重新下载同步。final.conf 里所有 RULE-SET 指向本仓库的 RULE/，**yfamilys 的 list 服务器挂了也不影响你**。
+- **final.conf**：merge.py 三步处理后的最终配置。
+- **custom_reject.list**：你的自定义规则源，策略统一走「自定义」策略组。
+- **「自定义」策略组**：在 [Proxy Group] 注入，可选 REJECT / DIRECT / 各分流策略组。当前广告规则建议在 Shadowrocket 里把「自定义」组选为 REJECT；后期加非广告规则时，可按需改选其他策略。
 
 ## Shadowrocket 订阅
 
@@ -40,17 +48,11 @@ custom_reject.list  ◀── 增删规则只改这里                          
 https://raw.githubusercontent.com/TomGrantHart/shadowrocket-config-mirror/main/shadowrocket_final.conf
 ```
 
-订阅后建议在配置项里设「自动更新」周期（如每天），Shadowrocket 会自动拉最新版。自定义规则已通过 final.conf 里的 RULE-SET 引用生效，**无需再单独装模块**。
+订阅后，到「代理分组」里找到「自定义」策略组，按当前需求选 REJECT（广告拦截）。
 
 ## 增删自定义规则
 
-只改 `custom_reject.list`，commit 后 Actions 下次运行会自动重新生成 final.conf。想立即生效，手动触发一次 workflow：Actions → Sync Upstream Config → Run workflow。
-
-每行格式 `类型,值`，例如：
-```
-DOMAIN-SUFFIX,example.com
-DOMAIN-KEYWORD,ads
-```
+只改 `custom_reject.list`（每行 `类型,值`），commit 后下次 Actions 自动重新生成 final.conf。规则统一走「自定义」策略组，在 Shadowrocket 里改该组的策略即可批量切换。
 
 ## 自定义
 
@@ -62,19 +64,14 @@ DOMAIN-KEYWORD,ads
 |------|-----------|---------|
 | 每天 1 次 | `0 18 * * *` | 次日 02:00 |
 | 每 6 小时 | `0 */6 * * *` | 每 6 小时 |
-| 每小时 | `0 * * * *` | 每小时 |
 
 ### 改上游源
 
-改 workflow 里的 `UPSTREAM_URL` 即可镜像别的配置。
-
-### 模块方案（可选）
-
-`custom_ad_block.sgmodule` 是等价的自定义规则模块。如果你更想用「配置 + 模块」分离的方案，订阅 `shadowrocket_basic.conf` 再装这个模块即可。与 final.conf 方案**二选一**，不要同时用（规则会重复）。
+改 workflow 里的 `UPSTREAM_URL`。
 
 ## 注意事项
 
-- 上游配置的 `#RULE-SET,...AntiAD.list,REJECT` 是注释状态（AntiAD 广告拦截未启用）。basic.conf 保持纯镜像不篡改。如需启用，在 `custom_reject.list` 里加一行 `RULE-SET,https://yfamilys.com/rule/AntiAD.list`（策略由 final.conf 的 RULE-SET 行指定为 REJECT，list 内不带策略）。
-- GitHub raw 链接有约 5 分钟缓存，Actions 推送后稍等再刷新订阅。
+- `RULE/AntiAD.list` 约 27 万行（数 MB），首次 clone/订阅加载稍慢，属正常。该 list 在上游配置里是被注释的，如需启用可在 `custom_reject.list` 加 `RULE-SET,https://raw.githubusercontent.com/TomGrantHart/shadowrocket-config-mirror/main/RULE/AntiAD.list`。
+- GitHub raw 有约 5 分钟缓存，Actions 推送后稍等再刷新订阅。
 - 仓库须为 public，raw 链接才能被 Shadowrocket 直接访问。
-- Actions 对个人公开仓库免费无限，每天跑一次毫无压力。
+- 上游新增/删除 list 时，Actions 的 RULE/ 同步步骤会自动跟着 basic.conf 里引用的 URL 增删对应文件（旧文件不会自动删，需手动清理或偶尔重置 RULE/）。
