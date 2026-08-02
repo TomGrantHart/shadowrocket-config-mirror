@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # 把上游镜像 shadowrocket_basic.conf 注入自定义规则后生成 shadowrocket_final.conf
-# 四步处理：
+# 五步处理：
 #   1. URL 替换：所有 yfamilys.com/rule/*.list -> 仓库 RULE/*.list（自托管）
 #   2. 启用 AntiAD 广告拦截（取消上游注释）
 #   3. 在 [Proxy Group] 段注入「自定义」策略组（供 RULE-SET 引用）
 #   4. 在 [Rule] 段注入 RULE-SET,<custom_reject.list>,自定义（优先匹配）
+#   5. 修改 [General] 段：dns-server 换 Cloudflare DoH + 添加 hijack-dns
 import io
 import os
 
@@ -27,6 +28,14 @@ INJECT_RULE = (
     "# === 自定义规则（自动注入，勿手动编辑 final.conf）===\n"
     f"RULE-SET,{CUSTOM_LIST_URL},自定义\n"
     "# === 自定义规则结束 ===\n"
+)
+
+# [General] 段 DNS 修改：明文 DNS 换 Cloudflare DoH（走代理查询防泄露）+ hijack-dns
+DNS_OLD = "dns-server = 119.29.29.29,114.114.114.114,223.5.5.5,system"
+DNS_NEW = (
+    "dns-server = https://cloudflare-dns.com/dns-query#proxy, "
+    "https://security.cloudflare-dns.com/dns-query#proxy\n"
+    "hijack-dns = 8.8.8.8:53"
 )
 
 with io.open(BASIC, encoding="utf-8") as f:
@@ -55,6 +64,12 @@ if "[Rule]" in content:
 else:
     content = content.rstrip("\n") + "\n\n[Rule]\n" + INJECT_RULE
 
+# 5. 修改 [General] 段：dns-server 换 Cloudflare DoH + 添加 hijack-dns
+if DNS_OLD in content:
+    content = content.replace(DNS_OLD, DNS_NEW)
+else:
+    print("::warning::未找到原始 dns-server 行，DNS 修改未生效")
+
 with io.open(FINAL, "w", encoding="utf-8", newline="\n") as f:
     f.write(content)
 
@@ -63,3 +78,4 @@ print(f"  1) URL 替换 -> {RULE_BASE}/")
 print(f"  2) 启用 AntiAD（REJECT）")
 print(f"  3) 注入策略组「自定义」")
 print(f"  4) 注入 RULE-SET -> {CUSTOM_LIST_URL}")
+print(f"  5) DNS -> Cloudflare DoH + hijack-dns")
