@@ -1,0 +1,67 @@
+name: Sync Upstream Config
+
+# 每天 CST 02:00 自动同步上游配置；也可手动触发
+on:
+  schedule:
+    - cron: '0 18 * * *'   # UTC 18:00 = CST 次日 02:00
+  workflow_dispatch:        # 手动触发：Actions → Sync Upstream Config → Run workflow
+
+permissions:
+  contents: write           # 允许 workflow 推送 commit
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_URL: https://yfamilys.com/config/shadowrocket_basic.conf
+  TARGET_FILE: shadowrocket_basic.conf
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download upstream
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --max-time 30 -o /tmp/upstream.conf "$UPSTREAM_URL"
+          # 内容校验：非空且包含关键段，避免把错误页覆盖好版本
+          if [ ! -s /tmp/upstream.conf ] || ! grep -q '\[Rule\]' /tmp/upstream.conf; then
+            echo "::warning::上游下载失败或内容异常，跳过本次更新"
+            exit 0
+          fi
+          cp /tmp/upstream.conf "$TARGET_FILE"
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet -- "$TARGET_FILE"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "无变化，跳过提交"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit & push
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$TARGET_FILE"
+          git commit -m "chore: sync upstream $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push
+          echo "已同步上游最新版本"
+
+      - name: Summary
+        run: |
+          echo "### 同步结果" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.diff.outputs.changed }}" = "true" ]; then
+            echo "- 上游有更新，已提交"  >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- 上游无变化或本次跳过" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "- 订阅链接（填进 Shadowrocket）：" >> "$GITHUB_STEP_SUMMARY"
+          echo "  \`https://raw.githubusercontent.com/${{ github.repository }}/main/shadowrocket_basic.conf\`" >> "$GITHUB_STEP_SUMMARY"

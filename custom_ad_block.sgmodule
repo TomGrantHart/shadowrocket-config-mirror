@@ -1,0 +1,37 @@
+#!name = 自定义广告拦截
+#!desc = 在订阅配置之上附加本地自定义 REJECT 规则，配置更新不影响本模块
+#!category = 个人规则
+
+# ============ 说明 ============
+# 本模块独立于任何配置文件，规则优先级高于配置。
+# 配置（shadowrocket_basic.conf）每天由 GitHub Actions 跟随上游更新，
+# 本模块规则不受其影响，且可随时增删。
+#
+# 安装：配置 → 模块 → 右上角➕ → 填本文件的 raw 链接 → 下载
+# 更新：改完 commit 后，模块页点更新即可
+# =============================
+
+[Rule]
+# Google 广告 / 分析
+DOMAIN-SUFFIX,app-measurement.com,REJECT
+DOMAIN-SUFFIX,app-analytics-services.com,REJECT
+DOMAIN-SUFFIX,fundingchoicesmessages.google.com,REJECT
+DOMAIN-SUFFIX,googleads.g.doubleclick-cn.net,REJECT
+
+# 字节跳动 / 抖音系埋点 & 日志
+DOMAIN-SUFFIX,log3-misc-lf.amemv.com,REJECT
+DOMAIN-SUFFIX,log5-misc-lf.amemv.com,REJECT
+DOMAIN-SUFFIX,log.snssdk.com,REJECT
+DOMAIN-SUFFIX,lf.snssdk.com,REJECT
+DOMAIN-SUFFIX,ma.zijieapi.com,REJECT
+DOMAIN-SUFFIX,lf-leads-fe-scm.bytecdn.com,REJECT
+DOMAIN-SUFFIX,mssdk5-normal-lf.zijieapi.com,REJECT
+
+# 腾讯 / 其他
+DOMAIN-SUFFIX,dig.bdurl.net,REJECT
+DOMAIN-SUFFIX,dig.zjurl.cn,REJECT
+DOMAIN-SUFFIX,in.appcenter.ms,REJECT
+DOMAIN-SUFFIX,finderpdd.video.qq.com,REJECT
+
+# 如需启用上游自带的 AntiAD 广告拦截（上游默认注释未启用），取消下一行注释：
+#RULE-SET,https://yfamilys.com/rule/AntiAD.list,REJECT
